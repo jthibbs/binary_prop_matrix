@@ -1,0 +1,145 @@
+
+
+#################################################### 
+## Built by Jarrett Thibodeaux with R Version 3.4.3
+   ## This function uses data.table package which was built with R Version 3.4.4
+#################################################### 
+
+#################################################### FUNCTION DEFINITION:
+####### binary_prop_matrix(arg1, arg2, arg3, arg4)
+  ## arg1 and arg2 = the two binary variables to compare as different relative to a long list of possible explanatory binary variables. 
+  ## arg3 = the list of possible explanatory binary variables. 
+  ## arg4 = the dataset being used. 
+
+
+#################################################### DESCRIPTION:
+####### Problem to address:
+ ## Exploring highest proportional differences in two binary variables vis a vis a long list of potential explanatory variables. 
+ ## With ratio level variables, one can find the most relevant variables by conducting a correlation matrix and sorting by strongest correlations. 
+ ## With binary variables, proportions must be taken and proportional differences must be evaluated. 
+
+####### Purpose:
+ ## This function is useful for finding which potential explanatory binary variables are most relevant when explaining the difference between two binary dependent variables.
+    ## The function is most useful when finding relevant binary variables from a list of hundreds of variables. 
+
+####### Legend of output table: 
+  # var1_factor_1: % who are factor 1 for variable 1 (vs. factor 0) ... var1_factor_diff: % who are factor 1 minus % who are factor 0.
+  # MAIN: Diff of diff: '% who are factor 1 minus % who are factor 0 for variable 1' minus '% who are factor 1 minus % who are factor 0 for variable 2'. 
+
+
+
+
+########################################################################################################################
+########################################################################################################################
+     #######################################  binary_prop_matrix function  #######################################
+########################################################################################################################
+
+binary_prop_matrix <- function(arg1, arg2, arg3, arg4)
+{
+####### If they insert a DV as a vector, stop the function and tell them to just insert the name:
+ifelse(typeof(arg1) == "character", arg1 <- arg1, stop("ERROR in Variable 1 (arg1): call variables by name, surrounded by quotations: i.e. 'variable_one'"))
+ifelse(typeof(arg2) == "character", arg2 <- arg2, stop("ERROR in Variable 2 (arg2): call variables by name, surrounded by quotations: i.e. 'variable_two'"))
+
+####### If the arg3 list of variables is a dataset then turn arg3 into the list of names of that dataset; if arg is a list of names then continue:
+ifelse(typeof(arg3) == "list", arg3 <- names(arg3), arg3 <- arg3)
+
+####### Check if data.table package is installed; if not, then install it; then import the package
+list.of.packages <- "data.table"
+new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+if(length(new.packages)>0) {install.packages(new.packages)}
+library(data.table)
+
+####### Create empty data frames to store values:
+arg1_tbl <- data.frame(matrix(ncol = 1, nrow = 3))
+arg2_tbl <- data.frame(matrix(ncol = 1, nrow = 3))
+
+####### Loop that outputs: 
+   # (1) Where all are DV = 1 for arg1 ... THEN where all are DV = 1 for arg2 (broken into 2 prop.tables).
+   # (2) Proportion of arg1 (then arg2) who are arg3 factor 0 vs who are arg3 factor 1 ... 
+   # (3) Proportion of arg1, factor 1 (then arg2, factor 1) who are arg3 factor 1 minus arg3 factor 2 (eg. proportion of smoker = yes, who are Male minus Female)
+
+for (i in arg3) {
+                 a <- table(arg4[, i], arg4[ , arg1])
+                 aa <- prop.table(a,2)
+                 arg1_tbl[,i] <- c(aa[1,2], aa[2,2], aa[1,2] - aa[2,2])
+                 b <- table(arg4[, i], arg4[ , arg2])
+                 bb <- prop.table(b,2)
+                 arg2_tbl[,i] <- c(bb[1,2], bb[2,2], bb[1,2] - bb[2,2])
+                }
+
+####### Remove initial rows inserted to create the empty data.frames:
+len<-length(arg1_tbl)
+arg1_tbl<-arg1_tbl[, 2:len]
+len<-length(arg2_tbl)
+arg2_tbl<-arg2_tbl[, 2:len]
+
+####### Transpose tables and merge arg1 and arg2 tables by variable:
+df <- data.frame(t(arg1_tbl))
+setDT(df, keep.rownames = TRUE)[]
+colnames(df) <- c("variable", "var1_factor_1", "var1_factor_2", "var1_factor_diff")
+df2 <- data.frame(t(arg2_tbl))
+setDT(df2, keep.rownames = TRUE)[]
+colnames(df2) <- c("variable", "var2_factor_1", "var2_factor_2", "var2_factor_diff")
+binary_tbl <- merge(x = df, y = df2, by = "variable", all.x = TRUE)
+
+####### Create 'difference of difference' variable, order by this and show table for analysis:
+binary_tbl$diff_of_diff <- binary_tbl$var1_factor_diff - binary_tbl$var2_factor_diff
+binary_tbl <- binary_tbl[order(binary_tbl$diff_of_diff, decreasing = TRUE), ]
+print(binary_tbl)
+
+}
+
+
+
+
+
+
+
+
+########################################################################################################################
+############################################ EXAMPLE:
+###### Import BRFSS data: examine the how cigarette users differ from e-cigarette users:
+ ## Cigarette users ('some day' and 'everyday' use) are defined as 1 under total_tobacco (0 = non-smoker).
+ ## E-cigarette users ('some day' and 'everyday' use) are defined as 1 under total_ecig (0 = non-smoker).
+ ## I want to know the most relevant demographics from a list of binary demographics (e.g. sex, rent vs own home, deaf vs not, ect).
+     # From a list of all demographics I select the following subset: data[, c(2:3, 5:7, 9, 11:18, 24)]
+       # This list could be hundreds of variables if desired. 
+
+###### For simplicity I define the variables as the arguements:
+#arg1 <- "total_tobacco"
+#arg2 <- "total_ecig"
+#arg3 <- names(data[, c(2:3, 5:7, 9, 11:18, 24)])         # works with names AND as a list of columns
+#arg4 <- data
+
+###### Run the function, get the table:
+#binary_prop_matrix(arg1, arg2, arg3, arg4)
+#    variable var1_factor_1 var1_factor_2 var1_factor_diff var2_factor_1 var2_factor_2 var2_factor_diff   diff_of_diff
+# 1: SMOKDAY2 0.71367236228    0.28632764    0.42734472455 0.44421891445    0.21620809    0.22801082544  0.19933389911
+# 2: RENTHOM1 0.55582953787    0.38075484    0.17507470047 0.49849081365    0.41246719    0.08602362205  0.08905107843
+# 3: NUMPHON2 0.62187958884    0.29148311    0.33039647577 0.59935897436    0.31410256    0.28525641026  0.04514006551
+# 4: VETERAN3 0.13260421804    0.86603232   -0.73342809898 0.11607611549    0.88248031   -0.76640419948  0.03297610049
+# 5:     DEAF 0.08688588793    0.91008253   -0.82319664641 0.07447506562    0.92296588   -0.84849081365  0.02529416724
+# 6:    BLIND 0.08665254852    0.90985176   -0.82319921093 0.07939632546    0.91745407   -0.83805774278  0.01485853185
+# 7: PREGNANT 0.01746880570    0.97629234   -0.95882352941 0.01341381623    0.97853789   -0.96512407780  0.00630054839
+# 8:  INCOME2 0.08392328672    0.08110892    0.00281436778 0.06765979787    0.06555978    0.00210001313  0.00071435466
+# 9:  HEIGHT3 0.00000000000    0.00000000    0.00000000000 0.00000000000    0.00000000    0.00000000000  0.00000000000
+#10:  WEIGHT2 0.00002901578    0.00000000    0.00002901578 0.00006564695    0.00000000    0.00006564695 -0.00003663117
+#11: CHILDREN 0.13115372342    0.09455774    0.03659597923 0.15511811024    0.10479003    0.05032808399 -0.01373210476
+#12: NUMHHOL2 0.04458119211    0.95355308   -0.90897188308 0.05771365150    0.94043655   -0.88272290048 -0.02624898260
+#13:  MARITAL 0.36738127702    0.22518929    0.14219198747 0.35826771654    0.18858268    0.16968503937 -0.02749305190
+#14:      SEX 0.47831510545    0.52155435   -0.04323924458 0.51332020997    0.48648294    0.02683727034 -0.07007651492
+#15:  CPDEMO1 0.74678407000    0.25053190    0.49625217000 0.83240844000    0.16481690    0.66759156000 -0.17133939600
+#16: INTERNET 0.75732873036    0.24117724    0.51615149186 0.88963254593    0.10898950    0.78064304462 -0.26449155276
+
+######## Summary of table results:
+ ## Socio-economic status and/or age related variables are somewhat relevant: RENTHOM1, CPDEMO1, INTERNET.
+    # Both types of smokers are more likely to rent. E-cig users are slightly more likely to rent compared to combustable users.
+       # 38% of combustable smokers rent compared to 41% of e-cig users.
+    # However, combustable cig users are less likely to have a cell phone and have internet access compared to non-smokers; not true for e-cig users:
+       # 24% of combustable smokers - but only 11% of e-cig users - have not used the internet in the last 30 days
+       # 25% of combustable smokers - but only 16.5% of e-cig users - do not have a cell phone.
+ ## SEX: E-cig smokers are more likely to be men than women while combustable cig smokers are more likely to be women than men.
+     # Men make up 47.8% of combustable cig smokers but 51.3% of e-cig smokers.
+        # NOTE: Respondents in this survey are 59%. 
+           # SO: It's unclear if women smoke than men generally BUT e-cig smokers are more likely to be men relative to the make-up of combustable cig smokers. 
+
